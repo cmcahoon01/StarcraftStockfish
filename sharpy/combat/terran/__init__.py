@@ -7,3 +7,4 @@ from .micro_medivacs import MicroMedivacs
 from .micro_liberators import MicroLiberators
 from .micro_reaper import MicroReaper
 from .micro_widowmines import MicroMines
+from .micro_cyclone import MicroCyclone
