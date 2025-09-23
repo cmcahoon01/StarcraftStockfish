@@ -54,7 +54,7 @@ class LiftBuildings(ActBase):
             await self.manage_flying_building(building)
         else:
             # Check if building needs to be lifted
-            if self.building_in_danger(building) and building.is_idle:
+            if self.building_in_danger(building):
                 await self.lift_building(building)
 
     async def lift_building(self, building: Unit):
@@ -62,11 +62,18 @@ class LiftBuildings(ActBase):
         # Store the original position
         self.lifted_building_origins[building.tag] = building.position
         
+        # Cancel all current activities/production before lifting
+        if not building.is_idle:
+            # Cancel any production queue
+            building(AbilityId.CANCEL_LAST)
+            # Stop any current command
+            building(AbilityId.STOP)
+        
         # Execute lift command
         lift_ability = self.LIFTABLE_BUILDINGS[building.type_id]
         building(lift_ability)
         
-        self.print(f"Lifting {building.type_id.name} at {building.position} with {building.health} health")
+        self.print(f"Lifting {building.type_id.name} at {building.position} with {building.health} health (cancelled activities)")
 
     async def manage_flying_building(self, building: Unit):
         """Manage a flying building - flee from enemies or try to land."""
