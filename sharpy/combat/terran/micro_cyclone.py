@@ -4,15 +4,18 @@ from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
 from sc2.unit import Unit
+from sc2.units import Units
 from sharpy.combat import Action, GenericMicro, MoveType
 
 
 class MicroCyclone(GenericMicro):
     def __init__(self):
         super().__init__()
-        self.lock_on_range = 6  # Range to initiate lock-on
-        self.lock_on_active_range = 9  # Range when lock-on is active
-        self.kite_distance = 1.5  # Additional distance to maintain when kiting
+        self.lock_on_range = 7  # Range to initiate lock-on
+        self.lock_on_active_range = 15  # Range when lock-on is active
+        self.min_range = 4  # Minimum range from any enemy
+        self.preferred_lock_on_distance = 14  # Preferred distance from lock-on target
+        self.fallback_distance = 12  # Distance from nearest enemy when locked on
 
     def unit_solve_combat(self, unit: Unit, current_command: Action) -> Action:
         # Handle retreat scenarios first
@@ -25,50 +28,67 @@ class MicroCyclone(GenericMicro):
             return current_command
 
         closest_enemy = relevant_enemies.closest_to(unit)
-        distance_to_enemy = unit.distance_to(closest_enemy)
+        distance_to_closest = unit.distance_to(closest_enemy)
 
-        # Check if we can use lock-on ability
+        # Check lock-on states
         can_lock_on = self.knowledge.cooldown_manager.is_ready(unit.tag, AbilityId.LOCKON_LOCKON)
-
-        # Check if we currently have an active lock-on
         has_active_lock_on = self.knowledge.cooldown_manager.is_ready(unit.tag, AbilityId.CANCEL_LOCKON)
 
-        # If we can lock-on and enemy is within lock-on range but not too close
-        if can_lock_on and distance_to_enemy <= self.lock_on_range and distance_to_enemy > 3:
-            # Use lock-on ability on the closest enemy
-            return Action(closest_enemy, True, AbilityId.LOCKON_LOCKON)
+        # Always maintain minimum range of 4 from nearest enemy
+        if distance_to_closest < self.min_range:
+            kite_position = self._get_kite_position(unit, closest_enemy, self.min_range + 1)
+            return Action(kite_position, False)
 
-        # If we have an active lock-on, maintain maximum range while staying in lock-on range
+        # Scenario 1: Lock-on is ready - get within range to activate then back away
+        if can_lock_on:
+            if distance_to_closest <= self.lock_on_range:
+                # Close enough to lock-on, use the ability
+                return Action(closest_enemy, True, AbilityId.LOCKON_LOCKON)
+            else:
+                # Move closer to get in lock-on range
+                return Action(closest_enemy, False)
+
+        # Scenario 2: Has active lock-on - aim for distance 14 from target or 12 from nearest enemy
         if has_active_lock_on:
-            ideal_range = self.lock_on_active_range - self.kite_distance
-
-            if distance_to_enemy < ideal_range:
-                # Too close, kite away
-                kite_position = self._get_kite_position(unit, closest_enemy, ideal_range)
+            # Try to maintain preferred distance from lock-on target (closest enemy)
+            if distance_to_closest < self.preferred_lock_on_distance:
+                # Too close to target, kite away to preferred distance
+                kite_position = self._get_kite_position(unit, closest_enemy, self.preferred_lock_on_distance)
                 return Action(kite_position, False)
-            elif distance_to_enemy > self.lock_on_active_range:
+            elif distance_to_closest > self.lock_on_active_range:
                 # Too far, might lose lock-on, move closer
                 return Action(closest_enemy, False)
             else:
-                # In good position, attack if ready
+                # In good range, attack if ready, otherwise use fallback distance logic
                 if self.ready_to_shoot(unit):
                     return Action(closest_enemy, True)
                 else:
-                    # Not ready to shoot, maintain position or micro-kite slightly
-                    kite_position = self._get_kite_position(unit, closest_enemy, distance_to_enemy + 0.5)
-                    return Action(kite_position, False)
+                    # Not ready to shoot, maintain fallback distance from nearest enemy
+                    target_distance = max(self.fallback_distance, self.min_range + 1)
+                    if distance_to_closest < target_distance:
+                        kite_position = self._get_kite_position(unit, closest_enemy, target_distance)
+                        return Action(kite_position, False)
 
-        # If we can't lock-on and don't have active lock-on, move to engage range
-        if distance_to_enemy > self.lock_on_range:
-            # Move closer to engage
-            return Action(closest_enemy, False)
-        elif distance_to_enemy < 4:
-            # Too close, kite away to safer distance
-            kite_position = self._get_kite_position(unit, closest_enemy, self.lock_on_range - 1)
-            return Action(kite_position, False)
+        # Scenario 3: Lock-on is on cooldown - stay out of enemy attack range
+        if not can_lock_on and not has_active_lock_on:
+            max_enemy_range = self._get_max_enemy_attack_range(unit, relevant_enemies)
+            safe_distance = max_enemy_range + 1  # Stay just outside enemy range
+            
+            if distance_to_closest < safe_distance:
+                # Too close to enemies, kite away to safe distance
+                kite_position = self._get_kite_position(unit, closest_enemy, safe_distance)
+                return Action(kite_position, False)
 
         # Default: use parent behavior
         return super().unit_solve_combat(unit, current_command)
+
+    def _get_max_enemy_attack_range(self, unit: Unit, enemies: Units) -> float:
+        """Calculate the maximum attack range of nearby enemies."""
+        max_range = 0
+        for enemy in enemies:
+            enemy_range = self.unit_values.real_range(enemy, unit)
+            max_range = max(max_range, enemy_range)
+        return max_range
 
     def _get_kite_position(self, unit: Unit, enemy: Unit, desired_distance: float) -> Point2:
         """Calculate a kite position to maintain desired distance from enemy."""
