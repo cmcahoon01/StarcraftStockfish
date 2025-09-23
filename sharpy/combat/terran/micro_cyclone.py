@@ -16,6 +16,7 @@ class MicroCyclone(GenericMicro):
         self.min_range = 4  # Minimum range from any enemy
         self.preferred_lock_on_distance = 14  # Preferred distance from lock-on target
         self.fallback_distance = 12  # Distance from nearest enemy when locked on
+        self.lock_targets: dict[int, Optional[int]] = dict()  # Maps cyclone tag to locked target tag
 
     def unit_solve_combat(self, unit: Unit, current_command: Action) -> Action:
         # Handle retreat scenarios first
@@ -37,58 +38,65 @@ class MicroCyclone(GenericMicro):
         # Always maintain minimum range of 4 from nearest enemy
         if distance_to_closest < self.min_range:
             kite_position = self._get_kite_position(unit, closest_enemy, self.min_range + 1)
-            return Action(kite_position, False)
+            return Action(kite_position, False, AbilityId.MOVE_MOVE)
 
         # Scenario 1: Lock-on is ready - get within range to activate then back away
         if can_lock_on:
             if distance_to_closest <= self.lock_on_range:
                 # Close enough to lock-on, use the ability
-                return Action(closest_enemy, True, AbilityId.LOCKON_LOCKON)
+                self.lock_targets[unit.tag] = closest_enemy.tag
+                return Action(closest_enemy, False, AbilityId.LOCKON_LOCKON)
             else:
                 # Move closer to get in lock-on range
-                return Action(closest_enemy, False)
+                return Action(closest_enemy, False, AbilityId.MOVE_MOVE)
 
         # Scenario 2: Has active lock-on - aim for distance 14 from target or 12 from nearest enemy
         if has_active_lock_on:
-            # Try to maintain preferred distance from lock-on target (closest enemy)
-            if distance_to_closest < self.preferred_lock_on_distance:
-                # Too close to target, kite away to preferred distance
-                kite_position = self._get_kite_position(unit, closest_enemy, self.preferred_lock_on_distance)
-                return Action(kite_position, False)
-            elif distance_to_closest > self.lock_on_active_range:
-                # Too far, might lose lock-on, move closer
-                return Action(closest_enemy, False)
-            else:
-                # In good range, attack if ready, otherwise use fallback distance logic
-                if self.ready_to_shoot(unit):
-                    return Action(closest_enemy, True)
+            if unit.tag in self.lock_targets and self.lock_targets[unit.tag] is not None:
+                active_target = self.knowledge.unit_cache.by_tag(self.lock_targets[unit.tag])
+                if active_target is not None:
+                    closest_threat, threat_range = self._get_closest_to_hitting(unit, relevant_enemies)
+                    engage_distance = self.preferred_lock_on_distance
+                    kite_position = self._get_kite_position(unit, closest_threat, self.preferred_lock_on_distance)
+                    while kite_position.distance_to(active_target) > self.lock_on_active_range:
+                        engage_distance -= 1
+                        possible_kite = self._get_kite_position(unit, closest_threat, engage_distance)
+                        if possible_kite.distance_to(closest_threat) <= self.unit_values.real_range(closest_threat, unit):
+                            break
+                        kite_position = possible_kite
+                    return Action(kite_position, False, AbilityId.MOVE_MOVE)
                 else:
-                    # Not ready to shoot, maintain fallback distance from nearest enemy
-                    target_distance = max(self.fallback_distance, self.min_range + 1)
-                    if distance_to_closest < target_distance:
-                        kite_position = self._get_kite_position(unit, closest_enemy, target_distance)
-                        return Action(kite_position, False)
+                    # Fallback: locked target no longer exists
+                    has_active_lock_on = False
+            else:
+                closest_threat, threat_range = self._get_closest_to_hitting(unit, relevant_enemies)
+                kite_position = self._get_kite_position(unit, closest_threat, self.fallback_distance)
+                return Action(kite_position, False, AbilityId.MOVE_MOVE)
+        else:
+            self.lock_targets[unit.tag] = None
 
         # Scenario 3: Lock-on is on cooldown - stay out of enemy attack range
         if not can_lock_on and not has_active_lock_on:
-            max_enemy_range = self._get_max_enemy_attack_range(unit, relevant_enemies)
-            safe_distance = max_enemy_range + 1  # Stay just outside enemy range
-            
-            if distance_to_closest < safe_distance:
-                # Too close to enemies, kite away to safe distance
-                kite_position = self._get_kite_position(unit, closest_enemy, safe_distance)
-                return Action(kite_position, False)
+            closest_threat, threat_range = self._get_closest_to_hitting(unit, relevant_enemies)
+            threat_range = max(threat_range, self.min_range)
+            kite_position = self._get_kite_position(unit, closest_threat, threat_range + 1)
+            return Action(kite_position, False, AbilityId.MOVE_MOVE)
 
         # Default: use parent behavior
         return super().unit_solve_combat(unit, current_command)
 
-    def _get_max_enemy_attack_range(self, unit: Unit, enemies: Units) -> float:
-        """Calculate the maximum attack range of nearby enemies."""
-        max_range = 0
+    def _get_closest_to_hitting(self, unit: Unit, enemies: Units) -> tuple[Optional[Unit], float]:
+        """Get the enemy that is closest to being able to attack the cyclone"""
+        closest_enemy = None
+        closest_distance = float('inf')
         for enemy in enemies:
             enemy_range = self.unit_values.real_range(enemy, unit)
-            max_range = max(max_range, enemy_range)
-        return max_range
+            distance = unit.distance_to(enemy) - enemy_range
+            if distance < closest_distance:
+                closest_distance = distance
+                closest_enemy = enemy
+        return closest_enemy, closest_distance
+
 
     def _get_kite_position(self, unit: Unit, enemy: Unit, desired_distance: float) -> Point2:
         """Calculate a kite position to maintain desired distance from enemy."""
@@ -103,10 +111,7 @@ class MicroCyclone(GenericMicro):
         kite_position = enemy.position + direction * desired_distance
 
         # Use pathing manager to find a good position if available
-        if unit.is_flying:
-            return self.pather.find_weak_influence_air(kite_position, 2)
-        else:
-            return self.pather.find_weak_influence_ground(kite_position, 2)
+        return self.pather.find_weak_influence_ground(kite_position, 2)
 
     def should_retreat(self, unit: Unit) -> bool:
         # Cyclones should be more aggressive about staying in the fight when they have lock-on
