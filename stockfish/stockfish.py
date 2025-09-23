@@ -3,6 +3,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
 from sharpy.knowledges import KnowledgeBot
 from sharpy.plans.terran import *
+from sharpy.plans.tactics.lift_buildings import LiftBuildings
 from stockfish.orders.banshee_harass import BansheeHarass
 from stockfish.orders.zone_gather_stock import PlanZoneGatherStock
 
@@ -132,6 +133,7 @@ class Stockfish(KnowledgeBot):
         tactics = [
             MineOpenBlockedBase(),
             PlanCancelBuilding(),
+            LiftBuildings(),
             LowerDepots(),
             PlanZoneDefense(),
             ScanEnemy(120),
