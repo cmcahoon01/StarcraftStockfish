@@ -42,6 +42,7 @@ class GenericMicro(MicroStep):
             CombatModel.Melee,
             CombatModel.StalkerToStalker,
         ]
+        self.closest_group = None
         super().__init__()
 
     def should_retreat(self, unit: Unit) -> bool:

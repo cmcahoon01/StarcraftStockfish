@@ -111,7 +111,7 @@ class PlanZoneAttack(ActBase):
         else:
             self.roles.attack_ended()
             attackers = Units([], self.ai)
-            for unit in self.roles.free_units:
+            for unit in self.roles.available_fighters:
                 if self.unit_values.should_attack(unit):
                     attackers.append(unit)
 
@@ -161,7 +161,7 @@ class PlanZoneAttack(ActBase):
 
         self.roles.refresh_tasks(already_attacking)
 
-        for unit in self.roles.free_units:
+        for unit in self.roles.available_fighters:
             if self.unit_values.should_attack(unit):
                 if not self.roles.is_in_role(UnitTask.Attacking, unit) and (
                     unit.distance_to(center) > 20 or unit.distance_to(front_runner) > 20

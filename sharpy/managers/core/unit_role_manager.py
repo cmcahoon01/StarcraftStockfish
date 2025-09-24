@@ -208,6 +208,13 @@ class UnitRoleManager(ManagerBase):
         return units
 
     @property
+    def available_fighters(self) -> Units:
+        units: Units = Units(self.roles[UnitTask.Idle].units, self.ai)
+        units.extend(self.roles[UnitTask.Moving].units)
+        units.extend(self.roles[UnitTask.Harassing].units)
+        return units
+
+    @property
     def idle_workers(self) -> Units:
         """Free workers, ie. gathering minerals or gas, or idling, and not dedicated to defending or scouting."""
         units: Units = self.roles[UnitTask.Idle].units

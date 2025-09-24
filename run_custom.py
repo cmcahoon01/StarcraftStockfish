@@ -13,9 +13,6 @@ def add_definitions(definitions: BotDefinitions):
     definitions.add_bot(
         "stockfish", lambda params: Bot(Race.Terran, Stockfish()),
     )
-    definitions.add_bot(
-        "newbuild", lambda params: Bot(Race.Terran, NewBuild()),
-    )
 
 def main():
     update_version_txt()

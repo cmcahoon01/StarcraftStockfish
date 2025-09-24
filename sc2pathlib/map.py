@@ -1,6 +1,5 @@
 # noinspection PyUnresolvedReferences
-from .sc2pathlib import VisionUnit
-from .sc2pathlib import Map
+from .sc2pathlib import VisionUnit, Map
 import numpy as np
 from typing import List, Optional, Tuple, Union
 from .choke import Choke
@@ -197,7 +196,10 @@ class Sc2Map:
     def safest_spot(
         self, map_type: MapType, destination_center: Tuple[float, float], walk_distance: float
     ) -> Tuple[Tuple[int, int], float]:
-        return self._map.lowest_influence_walk(map_type, destination_center, walk_distance)
+        try:
+            return self._map.lowest_influence_walk(map_type, destination_center, walk_distance)
+        except IndexError:
+            return (1, 1), 1
 
     def lowest_influence_in_grid(
         self, map_type: MapType, destination_center: Tuple[float, float], radius: int

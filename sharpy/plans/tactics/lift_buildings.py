@@ -50,7 +50,7 @@ class LiftBuildings(ActBase):
 
     async def manage_building(self, building: Unit):
         """Manage a single liftable building - lift if in danger, flee if lifted, land when safe."""
-        if building.is_flying:
+        if building.tag in self.lifted_building_origins:
             await self.manage_flying_building(building)
         else:
             # Check if building needs to be lifted
@@ -77,16 +77,6 @@ class LiftBuildings(ActBase):
 
     async def manage_flying_building(self, building: Unit):
         """Manage a flying building - flee from enemies or try to land."""
-        # Check if the building has already landed (but we haven't processed it yet)
-        if not building.is_flying:
-            # Clean up tracking for landed buildings
-            if building.tag in self.lifted_building_origins:
-                del self.lifted_building_origins[building.tag]
-            if building.tag in self.building_target_positions:
-                del self.building_target_positions[building.tag]
-            if building.tag in self.building_solver.structure_target_move_location:
-                del self.building_solver.structure_target_move_location[building.tag]
-            return
         
         # Find nearby enemies that can attack air
         nearby_air_attackers = self.get_nearby_air_attackers(building.position, 10)
@@ -225,8 +215,8 @@ class LiftBuildings(ActBase):
         previous_building = self.previous_units_manager.last_unit(building.tag)
         if previous_building:
             health = building.health
-            # Lift when building is below 30% health and losing health
-            danger_threshold = building.health_max * 0.3
+            # Lift when building is below 40% health and losing health
+            danger_threshold = building.health_max * 0.4
             if health < previous_building.health and health < danger_threshold:
                 return True
         return False

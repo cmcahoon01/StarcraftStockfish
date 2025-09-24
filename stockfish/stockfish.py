@@ -2,6 +2,7 @@ from sc2.data import Race
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
 from sharpy.knowledges import KnowledgeBot
+from sharpy.plans.tactics.harass import Harass
 from sharpy.plans.terran import *
 from sharpy.plans.tactics.lift_buildings import LiftBuildings
 from stockfish.orders.banshee_harass import BansheeHarass
@@ -22,7 +23,7 @@ class StockBuildOrder(BuildOrder):
             Step(Supply(13), GridBuilding(UnitTypeId.SUPPLYDEPOT, 1)),
             Step(UnitReady(UnitTypeId.SUPPLYDEPOT, 0.95), DefensiveBuilding(UnitTypeId.BARRACKS, DefensePosition.WallBarracks, 0)),
             StepBuildGas(1, Supply(16)),
-            Step(None, MorphOrbitals(2), skip_until=UnitReady(UnitTypeId.BARRACKS, 1)),
+            Step(None, MorphOrbitals(1), skip_until=UnitReady(UnitTypeId.BARRACKS, 1)),
             Expand(2),
             Step(Supply(16), GridBuilding(UnitTypeId.SUPPLYDEPOT, 2)),
             DefensiveBuilding(UnitTypeId.BUNKER, DefensePosition.Entrance, 1),
@@ -30,6 +31,7 @@ class StockBuildOrder(BuildOrder):
             Step(None, GridBuilding(UnitTypeId.FACTORY, 1), skip_until=UnitReady(UnitTypeId.BARRACKS, 1)),
             Step(None, GridBuilding(UnitTypeId.STARPORT, 1), skip_until=UnitReady(UnitTypeId.FACTORY, 1)),
             Step(None, BuildAddon(UnitTypeId.STARPORTTECHLAB, UnitTypeId.STARPORT, 1)),
+            Step(None, GridBuilding(UnitTypeId.ENGINEERINGBAY, 1)),
             Step(None, GridBuilding(UnitTypeId.FACTORY, 2)),
             Step(None, Expand(3), skip_until=RequireCustom(self.should_expand)),
             Step(
@@ -60,18 +62,18 @@ class StockBuildOrder(BuildOrder):
 
         build_steps_harass = [
             Step(UnitReady(UnitTypeId.STARPORTTECHLAB, 1), ActUnit(UnitTypeId.BANSHEE, UnitTypeId.STARPORT, 2, priority=True)),
-            # Step(None, ActUnit(UnitTypeId.CYCLONE, UnitTypeId.FACTORY, 2)),
+            Step(None, ActUnit(UnitTypeId.CYCLONE, UnitTypeId.FACTORY, 3)),
         ]
 
         build_steps_mech = [
-            Step(UnitExists(UnitTypeId.FACTORY, 1), ActUnit(UnitTypeId.WIDOWMINE, UnitTypeId.FACTORY, 2)),
-            Step(UnitReady(UnitTypeId.FACTORYTECHLAB, 1), ActUnit(UnitTypeId.SIEGETANK, UnitTypeId.FACTORY, 20))
+            Step(UnitExists(UnitTypeId.FACTORY, 1), ActUnit(UnitTypeId.HELLION, UnitTypeId.FACTORY, 2)),
+            # Step(UnitReady(UnitTypeId.FACTORYTECHLAB, 1), ActUnit(UnitTypeId.SIEGETANK, UnitTypeId.FACTORY, 20)),
         ]
 
         build_steps_marines = [
             Step(UnitReady(UnitTypeId.BARRACKS, 1), ActUnit(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 4)),
             Step(Minerals(250), ActUnit(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 20)),
-            Step(None, ActUnit(UnitTypeId.MEDIVAC, UnitTypeId.STARPORT, 2)),
+            Step(None, ActUnit(UnitTypeId.MEDIVAC, UnitTypeId.STARPORT, 2), skip_until=UnitExists(UnitTypeId.MARINE, 10, include_pending=True)),
             Step(None, ActUnit(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 100)),
         ]
 
@@ -127,7 +129,7 @@ class Stockfish(KnowledgeBot):
         return Race.Terran
 
     async def create_plan(self) -> BuildOrder:
-        self.attack = PlanZoneAttack(40)
+        self.attack = PlanZoneAttack(20)
         speed_mine = Step(None, SpeedMining(), lambda ai: ai.client.game_step < 5)
 
         tactics = [
@@ -145,6 +147,7 @@ class Stockfish(KnowledgeBot):
             ContinueBuilding(),
             PlanZoneGatherStock(),
             BansheeHarass(),
+            Harass(),
             self.attack,
             PlanFinishEnemy(),
         ]

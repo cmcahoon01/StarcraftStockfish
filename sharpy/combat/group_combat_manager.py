@@ -79,6 +79,11 @@ class GroupCombatManager(ManagerBase, ICombatManager):
 
         self._tags.append(unit.tag)
 
+    def remove_unit(self, unit: Unit):
+        """Remove a single unit from combat tracking."""
+        if unit.tag in self._tags:
+            self._tags.remove(unit.tag)
+
     def add_units(self, units: Units):
         for unit in units:
             self.add_unit(unit)
