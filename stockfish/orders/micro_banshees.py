@@ -24,7 +24,7 @@ class MicroBanshees(GenericMicro):
             # not in combat
             return current_command
 
-        relevant_enemies = self.enemies_near_by.visible
+        relevant_enemies = self.enemies_near_by
 
         self.can_attack_air = False
         self.can_detect = False
@@ -48,15 +48,6 @@ class MicroBanshees(GenericMicro):
             requested_mode = AbilityId.BEHAVIOR_CLOAKON_BANSHEE
         else:
             requested_mode = AbilityId.BEHAVIOR_CLOAKOFF_BANSHEE
-
-        # if (can_detect and can_attack_air) or unit.health_percentage < 0.5:
-        #     threats = relevant_enemies.filter(lambda unit: unit.can_attack_air) | relevant_enemies.filter(
-        #         lambda unit: unit.is_detector)
-        #     if threats.exists:
-        #         closest_threat = threats.closest_to(unit)
-        #         backstep: Point2 = unit.position.towards(closest_threat.position, -5)
-        #         backstep = self.pather.find_weak_influence_air(backstep, 4)
-        #         return Action(target=backstep, is_attack=False)
 
         if unit.has_buff(BuffId.BANSHEECLOAK) and requested_mode == AbilityId.BEHAVIOR_CLOAKOFF_BANSHEE:
             return Action(target=None, is_attack=False, ability=AbilityId.BEHAVIOR_CLOAKOFF_BANSHEE)

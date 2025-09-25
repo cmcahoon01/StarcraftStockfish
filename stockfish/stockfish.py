@@ -41,16 +41,15 @@ class StockBuildOrder(BuildOrder):
             ),
             # BuildStep(None, GridBuilding(UnitTypeId.FACTORY, 3)),
             BuildGas(3),
+            BuildGas(4),
             Step(None, GridBuilding(UnitTypeId.BARRACKS, 2)),
             Step(None, BuildAddon(UnitTypeId.BARRACKSTECHLAB, UnitTypeId.BARRACKS, 1)),
-            Step(None, Tech(UpgradeId.SHIELDWALL)),
-            BuildGas(4),
             Step(None, GridBuilding(UnitTypeId.ARMORY, 2)),
             Step(None, GridBuilding(UnitTypeId.BARRACKS, 5)),
             Step(None, BuildAddon(UnitTypeId.BARRACKSREACTOR, UnitTypeId.BARRACKS, 3)),
             Step(None, GridBuilding(UnitTypeId.ENGINEERINGBAY, 2)),
-            Step(None, GridBuilding(UnitTypeId.FACTORY, 3)),
-            Step(None, BuildAddon(UnitTypeId.FACTORYTECHLAB, UnitTypeId.FACTORY, 3)),
+            Step(None, BuildGas(6), skip_until=UnitExists(UnitTypeId.COMMANDCENTER, 1) or UnitExists(UnitTypeId.PLANETARYFORTRESS, 2)),
+            Step(None, GridBuilding(UnitTypeId.FACTORY, 6)),
         ]
 
         need_detection = [
@@ -60,21 +59,26 @@ class StockBuildOrder(BuildOrder):
             Step(UnitReady(UnitTypeId.STARPORT, 1), ActUnit(UnitTypeId.RAVEN, UnitTypeId.STARPORT, 1, priority=True)),
         ]
 
+        tempest_counter = [
+            Step(EnemyUnitExistsAfter(UnitTypeId.TEMPEST), None),
+            Step(UnitReady(UnitTypeId.STARPORT, 1), ActUnit(UnitTypeId.VIKINGFIGHTER, UnitTypeId.STARPORT, 20, priority=True)),
+        ]
+
         build_steps_harass = [
+            Step(UnitReady(UnitTypeId.BARRACKS, 1), ActUnit(UnitTypeId.REAPER, UnitTypeId.BARRACKS, 1), skip=UnitExists(UnitTypeId.REAPER, 1, include_killed=True)),
             Step(UnitReady(UnitTypeId.STARPORTTECHLAB, 1), ActUnit(UnitTypeId.BANSHEE, UnitTypeId.STARPORT, 2, priority=True)),
-            Step(None, ActUnit(UnitTypeId.CYCLONE, UnitTypeId.FACTORY, 3)),
+            Step(None, ActUnit(UnitTypeId.CYCLONE, UnitTypeId.FACTORY, 2), skip=UnitExists(UnitTypeId.CYCLONE, 3, include_killed=True)),
         ]
 
         build_steps_mech = [
-            Step(UnitExists(UnitTypeId.FACTORY, 1), ActUnit(UnitTypeId.HELLION, UnitTypeId.FACTORY, 2)),
-            # Step(UnitReady(UnitTypeId.FACTORYTECHLAB, 1), ActUnit(UnitTypeId.SIEGETANK, UnitTypeId.FACTORY, 20)),
+            # Step(UnitExists(UnitTypeId.FACTORY, 1), ActUnit(UnitTypeId.HELLION, UnitTypeId.FACTORY, 2), skip=UnitExists(UnitTypeId.HELLION, 2, include_killed=True)),
+            Step(UnitReady(UnitTypeId.FACTORYTECHLAB, 1), ActUnit(UnitTypeId.SIEGETANK, UnitTypeId.FACTORY, 20, priority=True)),
         ]
 
         build_steps_marines = [
             Step(UnitReady(UnitTypeId.BARRACKS, 1), ActUnit(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 4)),
-            Step(Minerals(250), ActUnit(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 20)),
             Step(None, ActUnit(UnitTypeId.MEDIVAC, UnitTypeId.STARPORT, 2), skip_until=UnitExists(UnitTypeId.MARINE, 10, include_pending=True)),
-            Step(None, ActUnit(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 100)),
+            Step(Minerals(250), ActUnit(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 100)),
         ]
 
         morph_commands = [
@@ -100,6 +104,7 @@ class StockBuildOrder(BuildOrder):
         build_order = [
             build_steps_scv,
             need_detection,
+            tempest_counter,
             build_steps_buildings,
             tech,
             morph_commands,
@@ -129,13 +134,13 @@ class Stockfish(KnowledgeBot):
         return Race.Terran
 
     async def create_plan(self) -> BuildOrder:
-        self.attack = PlanZoneAttack(20)
+        self.attack = PlanZoneAttack(50)
         speed_mine = Step(None, SpeedMining(), lambda ai: ai.client.game_step < 5)
 
         tactics = [
             MineOpenBlockedBase(),
             PlanCancelBuilding(),
-            LiftBuildings(),
+            # LiftBuildings(), # Broken
             LowerDepots(),
             PlanZoneDefense(),
             ScanEnemy(120),

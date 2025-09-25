@@ -31,8 +31,11 @@ class PlanZoneGatherStock(PlanZoneGatherTerran):
         units.extend(self.roles.idle)
 
         for unit in units:
-            if unit.type_id == UnitTypeId.BANSHEE and self.roles.unit_role(unit) == UnitTask.Harassing:
+            if unit.type_id.value == UnitTypeId.BANSHEE.value and self.roles.unit_role(unit) == UnitTask.Harassing:
                 continue  # Skip Banshees
+            harassing_types = {UnitTypeId.CYCLONE.value, UnitTypeId.HELLION.value, UnitTypeId.REAPER.value}
+            if unit.type_id.value in harassing_types:
+                continue
             if self.unit_values.should_attack(unit):
                 d = unit.position.distance_to(self.gather_point)
                 if unit.type_id == UnitTypeId.SIEGETANK and d < random_variable:

@@ -1,9 +1,9 @@
 from enum import Enum
 from typing import Optional, List, cast
 
-from ids.unit_typeid import UnitTypeId
+from sc2.ids.unit_typeid import UnitTypeId
 from sharpy.combat.group_combat_manager import GroupCombatManager
-from sharpy.interfaces import IGatherPointSolver, IZoneManager, IEnemyUnitsManager, IGameAnalyzer
+from sharpy.interfaces import IGatherPointSolver, IZoneManager, IEnemyUnitsManager, IGameAnalyzer, ICombatManager
 from sharpy.managers.extensions import GameAnalyzer
 from sharpy.plans.acts import ActBase
 from sharpy.managers.extensions.game_states.advantage import (
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 class Harass(ActBase):
     gather_point_solver: IGatherPointSolver
     zone_manager: IZoneManager
+    combat_manager: ICombatManager
     enemy_units_manager: IEnemyUnitsManager
     game_analyzer: Optional[IGameAnalyzer]
     pather: "PathingManager"
@@ -51,6 +52,12 @@ class Harass(ActBase):
         self.gather_point_solver = knowledge.get_required_manager(IGatherPointSolver)
         self.zone_manager = knowledge.get_required_manager(IZoneManager)
         self.enemy_units_manager = knowledge.get_required_manager(IEnemyUnitsManager)
+        self.microRules.load_default_methods()
+        self.microRules.load_default_micro()
+        await self.microRules.start(knowledge)
+        self.combat_manager: GroupCombatManager = cast(GroupCombatManager, self.combat)
+        self.combat_manager.rules = self.microRules
+        await self.combat_manager.start(knowledge)
 
 
     async def execute(self) -> bool:
@@ -61,7 +68,7 @@ class Harass(ActBase):
         return True
 
     def assign_harassers(self):
-        harassing_types = {UnitTypeId.CYCLONE.value, UnitTypeId.HELLION.value, UnitTypeId.MARINE.value}
+        harassing_types = {UnitTypeId.CYCLONE.value, UnitTypeId.HELLION.value, UnitTypeId.REAPER.value}
         for unit in self.roles.free_units:
             if unit.type_id.value in harassing_types:
                 self.roles.set_task(UnitTask.Harassing, unit)
@@ -81,13 +88,9 @@ class Harass(ActBase):
         type_id = unit.type_id
         units: Units = Units([unit], self.ai)
         group: CombatUnits = CombatUnits(units, self.knowledge)
-        combat_manager: GroupCombatManager = cast(GroupCombatManager, self.combat)
-        combat_manager.add_unit(unit)
-        micro: MicroStep = combat_manager.unit_micros.get(type_id, combat_manager.generic_micro)
-        micro.init_group(combat_manager.rules, group, units, combat_manager.enemy_groups, MoveType.Harass, target)
-        action = micro.unit_solve_combat(unit, Action(target, True))
-        action.to_commmand(unit)
-        combat_manager.remove_unit(unit)
+        self.combat_manager.add_unit(unit)
+        self.combat_manager.attack_to(group, target, MoveType.Harass)
+        self.combat_manager.remove_unit(unit)
 
 
     def _get_target(self) -> Optional[Point2]:

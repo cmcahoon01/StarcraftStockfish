@@ -30,7 +30,7 @@ class MicroReaper(GenericMicro):
         grenade_target: Optional[Unit] = None
         enemy: Unit
 
-        for enemy in self.enemies_near_by:
+        for enemy in self.enemies_near_by.not_structure:
             d = enemy.distance_to(unit)
             if d < 6:
                 grenade_score = self.cache.enemy_in_range(enemy.position, 3).not_structure.not_flying.amount
@@ -50,6 +50,12 @@ class MicroReaper(GenericMicro):
         # run away if hurt
         if unit.health_percentage < self.run_percentage:
             return self.stay_safe(unit, current_command)
+
+        # prevent attacking buildings
+        if current_command.is_attack and current_command.target is not None:
+            if isinstance(current_command.target, Unit):
+                if current_command.target.is_structure:
+                    return self.stay_safe(unit, current_command)
 
         return super().unit_solve_combat(unit, current_command)
 

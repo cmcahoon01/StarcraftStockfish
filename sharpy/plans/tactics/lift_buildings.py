@@ -4,6 +4,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
 from sc2.unit import Unit
 from sharpy.interfaces import IPreviousUnitsManager, IBuildingSolver
+from sharpy.knowledges import Knowledge
 from sharpy.plans.acts import ActBase
 
 
@@ -30,6 +31,7 @@ class LiftBuildings(ActBase):
 
     def __init__(self):
         super().__init__()
+        self.flying_buildings: Set[int] = set()
         # Store original positions of lifted buildings
         self.lifted_building_origins: Dict[int, Point2] = {}
         # Store target landing positions for buildings
@@ -44,18 +46,16 @@ class LiftBuildings(ActBase):
         # Process all our liftable buildings
         for building in self.ai.structures:  # type: Unit
             if building.type_id in self.LIFTABLE_BUILDINGS:
-                await self.manage_building(building)
-        
+                if building.tag not in self.flying_buildings:
+                    await self.manage_grounded_building(building)
+                else:
+                    await self.manage_flying_building(building.tag)
+
         return True
 
-    async def manage_building(self, building: Unit):
-        """Manage a single liftable building - lift if in danger, flee if lifted, land when safe."""
-        if building.tag in self.lifted_building_origins:
-            await self.manage_flying_building(building)
-        else:
-            # Check if building needs to be lifted
-            if self.building_in_danger(building):
-                await self.lift_building(building)
+    async def manage_grounded_building(self, building: Unit):
+        if self.building_in_danger(building):
+            await self.lift_building(building)
 
     async def lift_building(self, building: Unit):
         """Lift a building that is in danger."""
@@ -71,13 +71,30 @@ class LiftBuildings(ActBase):
         
         # Execute lift command
         lift_ability = self.LIFTABLE_BUILDINGS[building.type_id]
-        building(lift_ability)
-        
-        self.print(f"Lifting {building.type_id.name} at {building.position} with {building.health} health (cancelled activities)")
+        resp = building(lift_ability)
+        print(f"Lifting {building.type_id.name}, response: {resp}, flying? {building.is_flying}")
+        if resp:  # If lift command was successful
+            self.flying_buildings.add(building.tag)
 
-    async def manage_flying_building(self, building: Unit):
+
+    def remove_building(self, building_tag):
+        # if building_tag in self.flying_buildings:
+        #     self.flying_buildings.remove(building_tag)
+        if building_tag in self.lifted_building_origins:
+            del self.lifted_building_origins[building_tag]
+        if building_tag in self.building_target_positions:
+            del self.building_target_positions[building_tag]
+        if building_tag in self.building_solver.structure_target_move_location:
+            del self.building_solver.structure_target_move_location[building_tag]
+
+
+    async def manage_flying_building(self, buildingTag: int):
         """Manage a flying building - flee from enemies or try to land."""
-        
+        building = self.ai.structures.find_by_tag(buildingTag)
+        if not building or building.health <= 0:
+            self.remove_building(buildingTag)
+            return
+
         # Find nearby enemies that can attack air
         nearby_air_attackers = self.get_nearby_air_attackers(building.position, 10)
         
@@ -95,9 +112,9 @@ class LiftBuildings(ActBase):
         
         for enemy in enemies:
             # Check if the enemy can attack air
-            if enemy.can_attack_air:
-                air_attackers.append(enemy)
-        
+            # if enemy.can_attack_air:
+            air_attackers.append(enemy)
+
         return air_attackers
 
     async def flee_from_enemies(self, building: Unit, enemies):
@@ -132,15 +149,16 @@ class LiftBuildings(ActBase):
         if building.tag not in self.lifted_building_origins:
             # No stored origin, find a new landing spot
             await self.find_and_set_landing_spot(building)
-            return
         
         original_position = self.lifted_building_origins[building.tag]
         
         # Check if we can land at the original position
         if self.can_land_at_position(building, original_position):
+            print(f"Landing {building.type_id.name} back at original position {original_position}, {building.is_moving}")
             await self.land_building_at_position(building, original_position)
         else:
             # Find an alternative landing spot
+            print(f"Original position blocked, finding new landing spot for {building.type_id.name}, {building.is_moving}")
             await self.find_and_set_landing_spot(building)
 
     def can_land_at_position(self, building: Unit, position: Point2) -> bool:
@@ -196,15 +214,8 @@ class LiftBuildings(ActBase):
             # We're close enough, try to land
             land_ability = self.LAND_ABILITIES.get(building.type_id)
             if land_ability and not building.is_using_ability(land_ability):
-                building(land_ability, position)
-                
-                # Clean up tracking when landing
-                if building.tag in self.lifted_building_origins:
-                    del self.lifted_building_origins[building.tag]
-                if building.tag in self.building_target_positions:
-                    del self.building_target_positions[building.tag]
-                if building.tag in self.building_solver.structure_target_move_location:
-                    del self.building_solver.structure_target_move_location[building.tag]
+                resp = building(land_ability, position)
+                print(f"Landing {building.type_id.name}, response: {resp}")
 
     def building_in_danger(self, building: Unit) -> bool:
         """Check if a building is in danger and should be lifted."""
@@ -216,7 +227,7 @@ class LiftBuildings(ActBase):
         if previous_building:
             health = building.health
             # Lift when building is below 40% health and losing health
-            danger_threshold = building.health_max * 0.4
+            danger_threshold = building.health_max * 1
             if health < previous_building.health and health < danger_threshold:
                 return True
         return False

@@ -14,8 +14,8 @@ class MicroCyclone(GenericMicro):
         self.lock_on_range = 7  # Range to initiate lock-on
         self.lock_on_active_range = 15  # Range when lock-on is active
         self.min_range = 4  # Minimum range from any enemy
-        self.preferred_lock_on_distance = 14  # Preferred distance from lock-on target
-        self.fallback_distance = 12  # Distance from nearest enemy when locked on
+        self.preferred_lock_on_distance = 10  # Preferred distance from lock-on target
+        self.fallback_distance = 10  # Distance from nearest enemy when locked on
         self.lock_targets: dict[int, Optional[int]] = dict()  # Maps cyclone tag to locked target tag
 
     def unit_solve_combat(self, unit: Unit, current_command: Action) -> Action:
@@ -35,10 +35,10 @@ class MicroCyclone(GenericMicro):
         can_lock_on = self.knowledge.cooldown_manager.is_ready(unit.tag, AbilityId.LOCKON_LOCKON)
         has_active_lock_on = self.knowledge.cooldown_manager.is_ready(unit.tag, AbilityId.CANCEL_LOCKON)
 
-        # Always maintain minimum range of 4 from nearest enemy
-        if distance_to_closest < self.min_range:
-            kite_position = self._get_kite_position(unit, closest_enemy, self.min_range + 1)
-            return Action(kite_position, False, AbilityId.MOVE_MOVE)
+        # # Always maintain minimum range of 4 from nearest enemy
+        # if distance_to_closest < self.min_range:
+        #     kite_position = self._get_kite_position(unit, closest_enemy, self.min_range + 1)
+        #     return Action(kite_position, False, AbilityId.MOVE_MOVE)
 
         # Scenario 1: Lock-on is ready - get within range to activate then back away
         if can_lock_on:
