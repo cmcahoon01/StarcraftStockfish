@@ -135,7 +135,7 @@ class Stockfish(KnowledgeBot):
 
     async def create_plan(self) -> BuildOrder:
         self.attack = PlanZoneAttack(50)
-        speed_mine = Step(None, SpeedMining(), lambda ai: ai.client.game_step < 5)
+        speed_mine = Step(None, SpeedMining())
 
         tactics = [
             MineOpenBlockedBase(),

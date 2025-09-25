@@ -52,10 +52,8 @@ class MicroReaper(GenericMicro):
             return self.stay_safe(unit, current_command)
 
         # prevent attacking buildings
-        if current_command.is_attack and current_command.target is not None:
-            if isinstance(current_command.target, Unit):
-                if current_command.target.is_structure:
-                    return self.stay_safe(unit, current_command)
+        if current_command.is_attack and len(self.enemies_near_by.not_structure) == 0:
+            return Action(current_command.target, False)
 
         return super().unit_solve_combat(unit, current_command)
 
