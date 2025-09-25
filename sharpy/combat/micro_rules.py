@@ -100,6 +100,7 @@ class MicroRules(Component):
         self.unit_micros[UnitTypeId.VIPER] = MicroVipers()
 
         # Terran
+        self.unit_micros[UnitTypeId.HELLION] = MicroHellions()
         self.unit_micros[UnitTypeId.HELLIONTANK] = NoMicro()
         self.unit_micros[UnitTypeId.SIEGETANK] = MicroTanks()
         self.unit_micros[UnitTypeId.VIKINGFIGHTER] = MicroVikings()
