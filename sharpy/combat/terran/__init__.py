@@ -8,3 +8,4 @@ from .micro_liberators import MicroLiberators
 from .micro_reaper import MicroReaper
 from .micro_widowmines import MicroMines
 from .micro_cyclone import MicroCyclone
+from .micro_hellions import MicroHellions
