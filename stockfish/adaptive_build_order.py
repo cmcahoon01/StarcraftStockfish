@@ -7,7 +7,6 @@ from sharpy.plans.acts.grid_building import GridBuilding
 from sharpy.plans.build_step import Step
 from sharpy.plans.require import UnitReady, UnitExists, Supply
 from sharpy.plans.acts.terran import *
-from sharpy.plans.terran import *
 
 
 class AdaptiveBuildOrder(ActBase):
@@ -68,7 +67,7 @@ class AdaptiveBuildOrder(ActBase):
         return all_complete
     
     async def _ensure_production_capacity(self):
-        """Ensure we have enough production buildings for required units"""
+        """Ensure we have enough production buildings and tech labs for required units"""
         counter_request = self.knowledge.unit_counter_request
         cache = self.knowledge.unit_cache
         
@@ -79,6 +78,8 @@ class AdaptiveBuildOrder(ActBase):
             
             if needed > 0:
                 production_buildings = self._get_production_buildings_for_unit(unit_type)
+                required_addon = self._get_required_addon_for_unit(unit_type)
+                
                 for building_type in production_buildings:
                     required_buildings = self._calculate_required_buildings(unit_type, needed)
                     current_buildings = cache.own(building_type).ready.amount
@@ -86,26 +87,104 @@ class AdaptiveBuildOrder(ActBase):
                     if current_buildings < required_buildings:
                         # Need more production buildings
                         await self._build_production_building(building_type, required_buildings)
+                    
+                    # If unit requires tech lab, ensure we have enough tech labs
+                    if required_addon:
+                        await self._ensure_tech_lab_capacity(building_type, required_addon, needed)
     
     def _get_production_buildings_for_unit(self, unit_type: UnitTypeId) -> List[UnitTypeId]:
         """Get the building types that can produce the given unit"""
         unit_to_building = {
+            # Barracks units (reactor compatible)
             UnitTypeId.MARINE: [UnitTypeId.BARRACKS],
-            UnitTypeId.MARAUDER: [UnitTypeId.BARRACKS],
             UnitTypeId.REAPER: [UnitTypeId.BARRACKS],
+            
+            # Barracks units (tech lab required)
+            UnitTypeId.MARAUDER: [UnitTypeId.BARRACKS],
             UnitTypeId.GHOST: [UnitTypeId.BARRACKS],
+            
+            # Factory units (reactor compatible)
             UnitTypeId.HELLION: [UnitTypeId.FACTORY],
+            UnitTypeId.HELLBAT: [UnitTypeId.FACTORY],
+            
+            # Factory units (tech lab required)
             UnitTypeId.CYCLONE: [UnitTypeId.FACTORY],
             UnitTypeId.SIEGETANK: [UnitTypeId.FACTORY],
             UnitTypeId.THOR: [UnitTypeId.FACTORY],
+            
+            # Starport units (reactor compatible)
             UnitTypeId.VIKINGFIGHTER: [UnitTypeId.STARPORT],
             UnitTypeId.MEDIVAC: [UnitTypeId.STARPORT],
             UnitTypeId.LIBERATOR: [UnitTypeId.STARPORT],
+            
+            # Starport units (tech lab required)
             UnitTypeId.RAVEN: [UnitTypeId.STARPORT],
             UnitTypeId.BANSHEE: [UnitTypeId.STARPORT],
             UnitTypeId.BATTLECRUISER: [UnitTypeId.STARPORT],
+            
+            # SCVs from command centers and upgrades
+            UnitTypeId.SCV: [UnitTypeId.COMMANDCENTER, UnitTypeId.ORBITALCOMMAND, UnitTypeId.PLANETARYFORTRESS],
         }
         return unit_to_building.get(unit_type, [])
+    
+    def _get_required_addon_for_unit(self, unit_type: UnitTypeId) -> Optional[UnitTypeId]:
+        """Get the addon type required to produce the given unit, if any"""
+        tech_lab_units = {
+            # Barracks tech lab units
+            UnitTypeId.MARAUDER: UnitTypeId.BARRACKSTECHLAB,
+            UnitTypeId.GHOST: UnitTypeId.BARRACKSTECHLAB,
+            
+            # Factory tech lab units
+            UnitTypeId.CYCLONE: UnitTypeId.FACTORYTECHLAB,
+            UnitTypeId.SIEGETANK: UnitTypeId.FACTORYTECHLAB,
+            UnitTypeId.THOR: UnitTypeId.FACTORYTECHLAB,
+            
+            # Starport tech lab units
+            UnitTypeId.RAVEN: UnitTypeId.STARPORTTECHLAB,
+            UnitTypeId.BANSHEE: UnitTypeId.STARPORTTECHLAB,
+            UnitTypeId.BATTLECRUISER: UnitTypeId.STARPORTTECHLAB,
+        }
+        return tech_lab_units.get(unit_type, None)
+    
+    def _get_addon_for_building(self, building_type: UnitTypeId, addon_type: UnitTypeId) -> UnitTypeId:
+        """Get the specific addon type for a building type"""
+        # This mapping ensures we get the right tech lab for the right building
+        addon_mapping = {
+            (UnitTypeId.BARRACKS, UnitTypeId.BARRACKSTECHLAB): UnitTypeId.BARRACKSTECHLAB,
+            (UnitTypeId.FACTORY, UnitTypeId.FACTORYTECHLAB): UnitTypeId.FACTORYTECHLAB,
+            (UnitTypeId.STARPORT, UnitTypeId.STARPORTTECHLAB): UnitTypeId.STARPORTTECHLAB,
+        }
+        return addon_mapping.get((building_type, addon_type), addon_type)
+    
+    async def _ensure_tech_lab_capacity(self, building_type: UnitTypeId, required_addon: UnitTypeId, needed_units: int):
+        """Ensure we have enough tech labs for the required production"""
+        cache = self.knowledge.unit_cache
+        
+        # Count buildings with the required addon
+        buildings_with_addon = 0
+        if required_addon == UnitTypeId.BARRACKSTECHLAB:
+            buildings_with_addon = cache.own(UnitTypeId.BARRACKSTECHLAB).ready.amount
+        elif required_addon == UnitTypeId.FACTORYTECHLAB:
+            buildings_with_addon = cache.own(UnitTypeId.FACTORYTECHLAB).ready.amount
+        elif required_addon == UnitTypeId.STARPORTTECHLAB:
+            buildings_with_addon = cache.own(UnitTypeId.STARPORTTECHLAB).ready.amount
+        
+        # Calculate how many tech labs we need
+        required_tech_labs = self._calculate_required_buildings(None, needed_units)  # Use same logic as buildings
+        
+        if buildings_with_addon < required_tech_labs:
+            # Need to build more tech labs
+            await self._build_tech_lab(building_type, required_addon, required_tech_labs - buildings_with_addon)
+    
+    async def _build_tech_lab(self, building_type: UnitTypeId, addon_type: UnitTypeId, count: int):
+        """Build tech labs on production buildings"""
+        if not self.knowledge.can_afford(addon_type):
+            return
+        
+        # Build tech lab addon
+        addon_step = BuildAddon(addon_type, building_type, count)
+        await addon_step.start(self.knowledge)
+        await addon_step.execute()
     
     def _calculate_required_buildings(self, unit_type: UnitTypeId, needed_units: int) -> int:
         """Calculate how many production buildings are needed for the given units"""
@@ -163,20 +242,55 @@ class AdaptiveBuildOrder(ActBase):
         
         # Check if we have production buildings available
         production_buildings = self._get_production_buildings_for_unit(unit_type)
+        required_addon = self._get_required_addon_for_unit(unit_type)
         cache = self.knowledge.unit_cache
         
         for building_type in production_buildings:
-            idle_buildings = cache.own(building_type).ready.idle
-            if idle_buildings.amount > 0:
-                return True
+            # If unit needs tech lab, check for buildings with tech labs
+            if required_addon:
+                if required_addon == UnitTypeId.BARRACKSTECHLAB:
+                    available_buildings = cache.own(UnitTypeId.BARRACKSTECHLAB).ready.idle
+                elif required_addon == UnitTypeId.FACTORYTECHLAB:
+                    available_buildings = cache.own(UnitTypeId.FACTORYTECHLAB).ready.idle
+                elif required_addon == UnitTypeId.STARPORTTECHLAB:
+                    available_buildings = cache.own(UnitTypeId.STARPORTTECHLAB).ready.idle
+                else:
+                    continue  # Unknown addon type
+                
+                if available_buildings.amount > 0:
+                    return True
+            else:
+                # Unit doesn't need tech lab, check for idle buildings without addons or with reactors
+                idle_buildings = cache.own(building_type).ready.idle
+                if idle_buildings.amount > 0:
+                    # Additional check: make sure building doesn't have a tech lab if we want reactor-compatible units
+                    # For now, just return True if there are idle buildings
+                    return True
         
         return False
     
     def _get_unit_resource_cost(self, unit_type: UnitTypeId) -> tuple[int, int]:
         """Get the mineral and gas cost for a unit type"""
         # Simplified cost mapping - in real implementation this would use game data
-        cost = self.ai._game_data.units[unit_type.value].cost
-        return cost.minerals, cost.vespene
+        unit_costs = {
+            UnitTypeId.SCV: (50, 0),
+            UnitTypeId.MARINE: (50, 0),
+            UnitTypeId.MARAUDER: (100, 25),
+            UnitTypeId.REAPER: (50, 50),
+            UnitTypeId.GHOST: (150, 125),
+            UnitTypeId.HELLION: (100, 0),
+            UnitTypeId.HELLBAT: (100, 0),
+            UnitTypeId.CYCLONE: (150, 100),
+            UnitTypeId.SIEGETANK: (150, 125),
+            UnitTypeId.THOR: (300, 200),
+            UnitTypeId.VIKINGFIGHTER: (150, 75),
+            UnitTypeId.MEDIVAC: (100, 100),
+            UnitTypeId.LIBERATOR: (150, 150),
+            UnitTypeId.RAVEN: (100, 200),
+            UnitTypeId.BANSHEE: (150, 100),
+            UnitTypeId.BATTLECRUISER: (400, 300),
+        }
+        return unit_costs.get(unit_type, (100, 50))  # Default cost
     
     def _prioritize_by_resources(self, unit_priorities: List[Tuple[float, UnitTypeId, int]]) -> list:
         """
