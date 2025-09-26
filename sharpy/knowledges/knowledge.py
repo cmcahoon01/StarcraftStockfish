@@ -20,6 +20,7 @@ from sharpy.interfaces import (
 from sc2.constants import *
 from sc2.position import Point2
 from typing import TYPE_CHECKING, TypeVar
+from stockfish.unit_counter_request import UnitCounterRequest
 
 from sharpy.managers.core import LogManager
 
@@ -61,6 +62,9 @@ class Knowledge:
 
         # Event listeners
         self._on_unit_destroyed_listeners: List[Callable] = list()
+        
+        # Unit counter request for adaptive build order
+        self.unit_counter_request: UnitCounterRequest = UnitCounterRequest()
 
     @property
     def debug(self) -> bool:
