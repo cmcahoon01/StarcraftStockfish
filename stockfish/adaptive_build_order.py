@@ -271,26 +271,8 @@ class AdaptiveBuildOrder(ActBase):
     
     def _get_unit_resource_cost(self, unit_type: UnitTypeId) -> tuple[int, int]:
         """Get the mineral and gas cost for a unit type"""
-        # Simplified cost mapping - in real implementation this would use game data
-        unit_costs = {
-            UnitTypeId.SCV: (50, 0),
-            UnitTypeId.MARINE: (50, 0),
-            UnitTypeId.MARAUDER: (100, 25),
-            UnitTypeId.REAPER: (50, 50),
-            UnitTypeId.GHOST: (150, 125),
-            UnitTypeId.HELLION: (100, 0),
-            UnitTypeId.HELLBAT: (100, 0),
-            UnitTypeId.CYCLONE: (150, 100),
-            UnitTypeId.SIEGETANK: (150, 125),
-            UnitTypeId.THOR: (300, 200),
-            UnitTypeId.VIKINGFIGHTER: (150, 75),
-            UnitTypeId.MEDIVAC: (100, 100),
-            UnitTypeId.LIBERATOR: (150, 150),
-            UnitTypeId.RAVEN: (100, 200),
-            UnitTypeId.BANSHEE: (150, 100),
-            UnitTypeId.BATTLECRUISER: (400, 300),
-        }
-        return unit_costs.get(unit_type, (100, 50))  # Default cost
+        cost = self.ai._game_data.units[unit_type.value].cost
+        return cost.minerals, cost.vespene
     
     def _prioritize_by_resources(self, unit_priorities: List[Tuple[float, UnitTypeId, int]]) -> list:
         """
