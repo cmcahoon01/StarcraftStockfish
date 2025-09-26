@@ -85,7 +85,7 @@ class AdaptiveBuildOrder(ActBase):
                     
                     if current_buildings < required_buildings:
                         # Need more production buildings
-                        await self._build_production_building(building_type)
+                        await self._build_production_building(building_type, required_buildings)
     
     def _get_production_buildings_for_unit(self, unit_type: UnitTypeId) -> List[UnitTypeId]:
         """Get the building types that can produce the given unit"""
@@ -112,22 +112,22 @@ class AdaptiveBuildOrder(ActBase):
         # Simple heuristic: assume we want to be able to produce all needed units 
         # within a reasonable timeframe
         if unit_type in [UnitTypeId.MARINE, UnitTypeId.MARAUDER]:
-            return max(1, (needed_units + 4) // 5)  # 5 marines per barracks capacity
+            return max(1, (needed_units + 4) // 5)  # marines per barracks capacity
         elif unit_type in [UnitTypeId.HELLION, UnitTypeId.CYCLONE, UnitTypeId.SIEGETANK]:
-            return max(1, (needed_units + 2) // 3)  # 3 units per factory capacity
+            return max(1, (needed_units + 4) // 5)  # units per factory capacity
         elif unit_type in [UnitTypeId.VIKINGFIGHTER, UnitTypeId.MEDIVAC, UnitTypeId.BANSHEE]:
-            return max(1, (needed_units + 1) // 2)  # 2 units per starport capacity
+            return max(1, (needed_units + 4) // 5)  # units per starport capacity
         else:
-            return max(1, needed_units // 2)
+            return max(1, needed_units // 5)
     
-    async def _build_production_building(self, building_type: UnitTypeId):
+    async def _build_production_building(self, building_type: UnitTypeId, required_count: int):
         """Build a specific production building if resources allow"""
         if not self.knowledge.can_afford(building_type):
             return
             
         # Create a building step and execute it
         if building_type in [UnitTypeId.BARRACKS, UnitTypeId.FACTORY, UnitTypeId.STARPORT]:
-            building_step = GridBuilding(building_type, 99)  # Build as many as needed
+            building_step = GridBuilding(building_type, required_count)  # Build as many as needed
             await building_step.start(self.knowledge)
             await building_step.execute()
     
@@ -175,25 +175,10 @@ class AdaptiveBuildOrder(ActBase):
     def _get_unit_resource_cost(self, unit_type: UnitTypeId) -> tuple[int, int]:
         """Get the mineral and gas cost for a unit type"""
         # Simplified cost mapping - in real implementation this would use game data
-        unit_costs = {
-            UnitTypeId.MARINE: (50, 0),
-            UnitTypeId.MARAUDER: (100, 25),
-            UnitTypeId.REAPER: (50, 50),
-            UnitTypeId.GHOST: (150, 125),
-            UnitTypeId.HELLION: (100, 0),
-            UnitTypeId.CYCLONE: (150, 100),
-            UnitTypeId.SIEGETANK: (150, 125),
-            UnitTypeId.THOR: (300, 200),
-            UnitTypeId.VIKINGFIGHTER: (150, 75),
-            UnitTypeId.MEDIVAC: (100, 100),
-            UnitTypeId.LIBERATOR: (150, 150),
-            UnitTypeId.RAVEN: (100, 200),
-            UnitTypeId.BANSHEE: (150, 100),
-            UnitTypeId.BATTLECRUISER: (400, 300),
-        }
-        return unit_costs.get(unit_type, (100, 50))  # Default cost
+        cost = self.ai._game_data.units[unit_type.value].cost
+        return cost.minerals, cost.vespene
     
-    def _prioritize_by_resources(self, unit_priorities: list) -> list:
+    def _prioritize_by_resources(self, unit_priorities: List[Tuple[float, UnitTypeId, int]]) -> list:
         """
         Re-prioritize unit building based on current resource availability.
         If floating lots of minerals but low gas, prioritize mineral-only units.
