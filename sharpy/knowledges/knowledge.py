@@ -61,6 +61,10 @@ class Knowledge:
 
         # Event listeners
         self._on_unit_destroyed_listeners: List[Callable] = list()
+        
+        # Unit counter request for adaptive build order
+        from stockfish.unit_counter_request import UnitCounterRequest
+        self.unit_counter_request: UnitCounterRequest = UnitCounterRequest()
 
     @property
     def debug(self) -> bool:

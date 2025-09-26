@@ -7,6 +7,7 @@ from sharpy.plans.terran import *
 from sharpy.plans.tactics.lift_buildings import LiftBuildings
 from stockfish.orders.banshee_harass import BansheeHarass
 from stockfish.orders.zone_gather_stock import PlanZoneGatherStock
+from stockfish.adaptive_build_order import AdaptiveBuildOrder
 
 class StockBuildOrder(BuildOrder):
     def __init__(self, knowledge: Knowledge):
@@ -185,4 +186,4 @@ class Stockfish(KnowledgeBot):
             self.attack,
             PlanFinishEnemy(),
         ]
-        return BuildOrder([StockBuildOrder(self.knowledge), tactics])
+        return BuildOrder([AdaptiveBuildOrder(self.knowledge), tactics])
