@@ -170,8 +170,7 @@ class GridBuilding(ActBuilding):
                     if self.knowledge.my_race == Race.Protoss:
                         await self.build_protoss(worker, count, position)
                     elif self.knowledge.my_race == Race.Terran:
-                        if not await self.build_terran(worker, count, position):
-                            return True
+                        await self.build_terran(worker, count, position)
                     else:
                         await self.build_zerg(worker, count, position)
                 return False

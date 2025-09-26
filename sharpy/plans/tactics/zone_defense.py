@@ -105,18 +105,13 @@ class PlanZoneDefense(ActBase):
                         self.combat.add_unit(unit)
                         zone_tags.append(unit.tag)
 
-                # Check if we have workers being attacked by enemy workers with no army units to help
-                worker_under_attack = zone.our_workers.filter(lambda u: u.shield_health_percentage < 0.75).exists
                 enemy_workers = enemies.filter(lambda u: u.type_id in UnitValue.worker_types)
                 has_army_units = self.ai.units.filter(lambda u: self.unit_values.should_attack(u)).amount > 0
                 
                 # If enemy workers are attacking our workers and we have no army, all SCVs need to defend
                 enemy_worker_attacking = (
-                    worker_under_attack and 
                     enemy_workers.exists and 
-                    not has_army_units and
-                    len(enemies) == 1 and
-                    enemies[0].type_id in UnitValue.worker_types
+                    not has_army_units
                 )
 
                 if (len(enemies) > 1 or 

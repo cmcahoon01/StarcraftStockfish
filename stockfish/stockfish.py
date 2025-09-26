@@ -34,7 +34,8 @@ class StockBuildOrder(BuildOrder):
 
         build_steps_buildings = [
             Step(Supply(13), GridBuilding(UnitTypeId.SUPPLYDEPOT, 1)),
-            Step(UnitReady(UnitTypeId.SUPPLYDEPOT, 0.95), DefensiveBuilding(UnitTypeId.BARRACKS, DefensePosition.WallBarracks, 0)),
+            # Step(UnitReady(UnitTypeId.SUPPLYDEPOT, 0.95), DefensiveBuilding(UnitTypeId.BARRACKS, DefensePosition.WallBarracks, 0)),
+            Step(UnitReady(UnitTypeId.SUPPLYDEPOT, 0.95), GridBuilding(UnitTypeId.BARRACKS, 1)),
             StepBuildGas(1, Supply(16)),
             Step(None, MorphOrbitals(1), skip_until=UnitReady(UnitTypeId.BARRACKS, 1)),
             Expand(2),
@@ -52,7 +53,6 @@ class StockBuildOrder(BuildOrder):
                 Expand(4),
                 skip_until=All([RequireCustom(self.should_expand), UnitReady(UnitTypeId.COMMANDCENTER, 3)]),
             ),
-            # BuildStep(None, GridBuilding(UnitTypeId.FACTORY, 3)),
             BuildGas(3),
             BuildGas(4),
             Step(None, GridBuilding(UnitTypeId.BARRACKS, 2)),
