@@ -105,9 +105,25 @@ class PlanZoneDefense(ActBase):
                         self.combat.add_unit(unit)
                         zone_tags.append(unit.tag)
 
-                if len(enemies) > 1 or (len(enemies) == 1 and enemies[0].type_id not in UnitValue.worker_types):
-                    # Pull workers to defend only and only if the enemy isn't one worker scout
-                    if defenders.is_enough_for(defense_required):
+                # Check if we have workers being attacked by enemy workers with no army units to help
+                worker_under_attack = zone.our_workers.filter(lambda u: u.shield_health_percentage < 0.75).exists
+                enemy_workers = enemies.filter(lambda u: u.type_id in UnitValue.worker_types)
+                has_army_units = self.ai.units.filter(lambda u: self.unit_values.should_attack(u)).amount > 0
+                
+                # If enemy workers are attacking our workers and we have no army, all SCVs need to defend
+                enemy_worker_attacking = (
+                    worker_under_attack and 
+                    enemy_workers.exists and 
+                    not has_army_units and
+                    len(enemies) == 1 and
+                    enemies[0].type_id in UnitValue.worker_types
+                )
+
+                if (len(enemies) > 1 or 
+                    (len(enemies) == 1 and enemies[0].type_id not in UnitValue.worker_types) or 
+                    enemy_worker_attacking):
+                    # Pull workers to defend
+                    if defenders.is_enough_for(defense_required) and not enemy_worker_attacking:
                         # Workers should return to mining.
                         for unit in zone_worker_defenders:
                             self.roles.clear_task(unit)
@@ -118,7 +134,7 @@ class PlanZoneDefense(ActBase):
                         # Zone is well under control without worker defense.
                     else:
                         await self.worker_defence(
-                            defenders.power, defense_required, enemy_center, zone, zone_tags, zone_worker_defenders
+                            defenders.power, defense_required, enemy_center, zone, zone_tags, zone_worker_defenders, enemy_worker_attacking
                         )
 
                 self.roles.refresh_tags(self.combat.tags)
@@ -126,7 +142,7 @@ class PlanZoneDefense(ActBase):
         return True  # never block
 
     async def worker_defence(
-        self, defenders: float, defense_required, enemy_center, zone: "Zone", zone_tags, zone_worker_defenders
+        self, defenders: float, defense_required, enemy_center, zone: "Zone", zone_tags, zone_worker_defenders, enemy_worker_attacking=False
     ):
         ground_enemies: Units = zone.known_enemy_units.not_flying
 
@@ -173,11 +189,11 @@ class PlanZoneDefense(ActBase):
                 defenders += self.unit_values.defense_value(self.worker_type)
                 self.combat.add_unit(unit)
 
-        if self.ai.time > 5 * 60 and not killing_probes and not self.knowledge.enemy_race == Race.Zerg:
+        if self.ai.time > 5 * 60 and not killing_probes and not enemy_worker_attacking and not self.knowledge.enemy_race == Race.Zerg:
             # late game and enemies aren't killing probes, go back to mining!
             return
 
-        if defense_required.power < 1 and not killing_probes:
+        if defense_required.power < 1 and not killing_probes and not enemy_worker_attacking:
             return  # Probably a single scout, don't pull workers
 
         if zone.our_wall() and self.ai.time < 200:
