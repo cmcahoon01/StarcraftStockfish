@@ -55,7 +55,7 @@ class Harass(ActBase):
         self.microRules.load_default_methods()
         self.microRules.load_default_micro()
         await self.microRules.start(knowledge)
-        self.combat_manager: GroupCombatManager = cast(GroupCombatManager, self.combat)
+        self.combat_manager: GroupCombatManager = cast(GroupCombatManager, self.knowledge.get_required_manager(ICombatManager))
         self.combat_manager.rules = self.microRules
         await self.combat_manager.start(knowledge)
 
@@ -96,6 +96,9 @@ class Harass(ActBase):
     def _get_target(self) -> Optional[Point2]:
         our_main = self.zone_manager.expansion_zones[0].center_location
         proxy_buildings = self.ai.enemy_structures.closer_than(70, our_main)
+
+        if self.ai.enemy_structures.exists:
+            return self.ai.enemy_structures.furthest_to(our_main).position
 
         if proxy_buildings.exists:
             return proxy_buildings.closest_to(our_main).position

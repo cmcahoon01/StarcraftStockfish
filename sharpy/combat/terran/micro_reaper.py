@@ -51,8 +51,10 @@ class MicroReaper(GenericMicro):
         if unit.health_percentage < self.run_percentage:
             return self.stay_safe(unit, current_command)
 
+        closest_enemy = self.enemies_near_by.closest_to(unit) if self.enemies_near_by.exists else None
+
         # prevent attacking buildings
-        if current_command.is_attack and len(self.enemies_near_by.not_structure) == 0:
+        if current_command.is_attack and closest_enemy and closest_enemy.is_structure:
             return Action(current_command.target, False)
 
         return super().unit_solve_combat(unit, current_command)

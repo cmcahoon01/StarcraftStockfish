@@ -16,14 +16,21 @@ class MicroBanshees(GenericMicro):
         super().__init__()
 
     def unit_solve_combat(self, unit: Unit, current_command: Action) -> Action:
+        acted = self.handle_cloak(unit, current_command)
+        if acted:
+            return acted
+
         if self.move_type in {MoveType.PanicRetreat, MoveType.DefensiveRetreat}:
             return current_command
 
-        closest = self.closest_units.get(unit.tag)
-        if not closest or closest.distance_to(unit) > 14:
-            # not in combat
-            return current_command
+        relevant_enemies = self.enemies_near_by
+        closest_enemy = relevant_enemies.closest_to(unit) if relevant_enemies.exists else None
+        a_move = not closest_enemy.is_structure if closest_enemy else False
+        current_command.is_attack = a_move
 
+        return current_command
+
+    def handle_cloak(self, unit: Unit, current_command: Action):
         relevant_enemies = self.enemies_near_by
 
         self.can_attack_air = False
@@ -54,4 +61,4 @@ class MicroBanshees(GenericMicro):
         elif not unit.has_buff(BuffId.BANSHEECLOAK) and requested_mode == AbilityId.BEHAVIOR_CLOAKON_BANSHEE:
             return Action(target=None, is_attack=False, ability=AbilityId.BEHAVIOR_CLOAKON_BANSHEE)
 
-        return current_command
+        return None

@@ -1,3 +1,4 @@
+import random
 from typing import Optional
 
 from sc2.ids.ability_id import AbilityId
@@ -12,7 +13,7 @@ class MicroHellions(GenericMicro):
     def __init__(self):
         super().__init__()
         self.attack_range = 5  # Hellion attack range
-        self.safe_distance_buffer = 1.5  # Buffer to stay outside enemy range
+        self.safe_distance_buffer = 1  # Buffer to stay outside enemy range
 
     def unit_solve_combat(self, unit: Unit, current_command: Action) -> Action:
         # Handle retreat scenarios first
@@ -21,6 +22,9 @@ class MicroHellions(GenericMicro):
 
         # Get nearby enemies that can threaten the hellion
         threatening_enemies = self._get_threatening_enemies(unit)
+
+        closest_enemy = self.enemies_near_by.closest_to(unit) if self.enemies_near_by.exists else None
+        a_move = not closest_enemy.is_structure if closest_enemy else False
         
         # Priority 1: Stay out of range of all enemy attack ranges
         if threatening_enemies:
@@ -32,29 +36,21 @@ class MicroHellions(GenericMicro):
                 if current_distance <= threat_range + self.safe_distance_buffer:
                     # Need to kite away from this threat
                     kite_position = self._get_kite_position(unit, enemy_in_range, threat_range + self.safe_distance_buffer + 1)
-                    return Action(kite_position, False, AbilityId.MOVE_MOVE)
-
-        # Priority 2: Fire at any enemy in range (5 for hellions)
-        enemies_in_attack_range = self.enemies_near_by.not_structure.in_attack_range_of(unit)
-        if enemies_in_attack_range and self.ready_to_shoot(unit):
-            # Find the best target to attack
-            target = self._select_best_target(unit, enemies_in_attack_range)
-            if target:
-                return Action(target, True)
+                    return Action(kite_position, a_move, AbilityId.MOVE_MOVE)
 
         # Priority 3: Move towards any nearby workers
         nearby_workers = self._get_nearby_workers(unit)
         if nearby_workers:
             closest_worker = nearby_workers.closest_to(unit)
-            return Action(closest_worker, False, AbilityId.MOVE_MOVE)
+            return Action(closest_worker, a_move, AbilityId.MOVE_MOVE)
 
         # Priority 4: Move towards the original target position
         # But don't attack structures - use non-attack move if no enemy units nearby
         if current_command.is_attack and len(self.enemies_near_by.not_structure) == 0:
-            return Action(current_command.target, False, AbilityId.MOVE_MOVE)
+            return Action(current_command.target, a_move, AbilityId.MOVE_MOVE)
 
         # Default behavior - keep moving towards original target
-        return Action(self.original_target, False, AbilityId.MOVE_MOVE)
+        return Action(self.original_target, a_move, AbilityId.MOVE_MOVE)
 
     def _get_threatening_enemies(self, unit: Unit) -> Units:
         """Get enemies that can potentially attack the hellion."""
@@ -87,20 +83,21 @@ class MicroHellions(GenericMicro):
         return closest_threat
 
     def _get_kite_position(self, unit: Unit, enemy: Unit, desired_distance: float) -> Point2:
-        """Calculate a kite position to maintain desired distance from enemy."""
-        # Calculate direction away from enemy
+        """Calculate a kite position to maintain desired distance from enemy, with slight randomization."""
         direction = unit.position - enemy.position
         if direction.x == 0 and direction.y == 0:
-            # If positions are identical, choose a direction towards our target
             direction = self.original_target - enemy.position
             if direction.x == 0 and direction.y == 0:
-                direction = Point2((1, 0))  # Fallback direction
+                direction = Point2((1, 0))
 
-        # Normalize and scale to desired distance
         direction = direction.normalized
         kite_position = enemy.position + direction * desired_distance
 
-        # Use pathing manager to find a good position if available
+        # Add slight randomization
+        offset_x = random.uniform(-1, 1)
+        offset_y = random.uniform(-1, 1)
+        kite_position = Point2((kite_position.x + offset_x, kite_position.y + offset_y))
+
         return self.pather.find_weak_influence_ground(kite_position, 2)
 
     def _select_best_target(self, unit: Unit, enemies_in_range: Units) -> Optional[Unit]:

@@ -35,11 +35,6 @@ class MicroCyclone(GenericMicro):
         can_lock_on = self.knowledge.cooldown_manager.is_ready(unit.tag, AbilityId.LOCKON_LOCKON)
         has_active_lock_on = self.knowledge.cooldown_manager.is_ready(unit.tag, AbilityId.CANCEL_LOCKON)
 
-        # # Always maintain minimum range of 4 from nearest enemy
-        # if distance_to_closest < self.min_range:
-        #     kite_position = self._get_kite_position(unit, closest_enemy, self.min_range + 1)
-        #     return Action(kite_position, False, AbilityId.MOVE_MOVE)
-
         # Scenario 1: Lock-on is ready - get within range to activate then back away
         if can_lock_on:
             if distance_to_closest <= self.lock_on_range:
@@ -79,7 +74,7 @@ class MicroCyclone(GenericMicro):
         if not can_lock_on and not has_active_lock_on:
             closest_threat, threat_range = self._get_closest_to_hitting(unit, relevant_enemies)
             threat_range = max(threat_range, self.min_range)
-            kite_position = self._get_kite_position(unit, closest_threat, threat_range + 1)
+            kite_position = self._get_kite_position(unit, closest_threat, threat_range + 1.5)
             return Action(kite_position, False, AbilityId.MOVE_MOVE)
 
         # Default: use parent behavior

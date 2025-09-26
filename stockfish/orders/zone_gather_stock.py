@@ -33,7 +33,7 @@ class PlanZoneGatherStock(PlanZoneGatherTerran):
         for unit in units:
             if unit.type_id.value == UnitTypeId.BANSHEE.value and self.roles.unit_role(unit) == UnitTask.Harassing:
                 continue  # Skip Banshees
-            harassing_types = {UnitTypeId.CYCLONE.value, UnitTypeId.HELLION.value, UnitTypeId.REAPER.value}
+            harassing_types = {UnitTypeId.CYCLONE.value, UnitTypeId.HELLION.value, UnitTypeId.REAPER.value, UnitTypeId.BANSHEE.value}
             if unit.type_id.value in harassing_types:
                 continue
             if self.unit_values.should_attack(unit):

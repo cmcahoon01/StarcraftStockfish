@@ -1,7 +1,7 @@
 from sc2.data import Race
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
-from sharpy.knowledges import KnowledgeBot
+from sharpy.knowledges import KnowledgeBot, Knowledge
 from sharpy.plans.tactics.harass import Harass
 from sharpy.plans.terran import *
 from sharpy.plans.tactics.lift_buildings import LiftBuildings
@@ -9,7 +9,20 @@ from stockfish.orders.banshee_harass import BansheeHarass
 from stockfish.orders.zone_gather_stock import PlanZoneGatherStock
 
 class StockBuildOrder(BuildOrder):
-    def __init__(self):
+    def __init__(self, knowledge: Knowledge):
+        class EnemyIs(RequireBase):
+            def __init__(self, race):
+                super().__init__()
+                self.race = race
+            def check(self) -> bool:
+                return knowledge.ai.enemy_race.value == self.race.value
+        class EnemyIsNot(RequireBase):
+            def __init__(self, race):
+                super().__init__()
+                self.race = race
+            def check(self) -> bool:
+                return knowledge.ai.enemy_race.value != self.race.value
+
         build_steps_scv = [
             Step(
                 None,
@@ -59,19 +72,30 @@ class StockBuildOrder(BuildOrder):
             Step(UnitReady(UnitTypeId.STARPORT, 1), ActUnit(UnitTypeId.RAVEN, UnitTypeId.STARPORT, 1, priority=True)),
         ]
 
-        tempest_counter = [
-            Step(EnemyUnitExistsAfter(UnitTypeId.TEMPEST), None),
-            Step(UnitReady(UnitTypeId.STARPORT, 1), ActUnit(UnitTypeId.VIKINGFIGHTER, UnitTypeId.STARPORT, 20, priority=True)),
+        air_counter = [
+            Step(Any([EnemyUnitExistsAfter(UnitTypeId.TEMPEST),
+                      EnemyUnitExistsAfter(UnitTypeId.VOIDRAY),
+                      EnemyUnitExistsAfter(UnitTypeId.LIBERATOR),
+                      EnemyUnitExistsAfter(UnitTypeId.BATTLECRUISER),
+                      EnemyUnitExistsAfter(UnitTypeId.MUTALISK),
+                      EnemyUnitExistsAfter(UnitTypeId.BROODLORD)]),None),
+            Step(None, DefensiveBuilding(UnitTypeId.MISSILETURRET, DefensePosition.CenterMineralLine, 1)),
+            Step(None, DefensiveBuilding(UnitTypeId.MISSILETURRET, DefensePosition.CenterMineralLine, 0)),
+            Step(None, GridBuilding(UnitTypeId.STARPORT, 4)),
+            Step(UnitReady(UnitTypeId.STARPORT, 1), ActUnit(UnitTypeId.VIKINGFIGHTER, UnitTypeId.STARPORT, 12, priority=True)),
         ]
 
+
         build_steps_harass = [
-            Step(UnitReady(UnitTypeId.BARRACKS, 1), ActUnit(UnitTypeId.REAPER, UnitTypeId.BARRACKS, 1), skip=UnitExists(UnitTypeId.REAPER, 1, include_killed=True)),
+            Step(UnitReady(UnitTypeId.BARRACKS, 1), ActUnit(UnitTypeId.REAPER, UnitTypeId.BARRACKS, 1),
+                 skip=Any([EnemyIs(Race.Terran), UnitExists(UnitTypeId.REAPER, 1, include_killed=True)])),
+            Step(UnitExists(UnitTypeId.FACTORY, 1), ActUnit(UnitTypeId.HELLION, UnitTypeId.FACTORY, 2),
+                 skip=Any([EnemyIsNot(Race.Zerg), UnitExists(UnitTypeId.HELLION, 2, include_killed=True)])),
             Step(UnitReady(UnitTypeId.STARPORTTECHLAB, 1), ActUnit(UnitTypeId.BANSHEE, UnitTypeId.STARPORT, 2, priority=True)),
-            Step(None, ActUnit(UnitTypeId.CYCLONE, UnitTypeId.FACTORY, 2), skip=UnitExists(UnitTypeId.CYCLONE, 3, include_killed=True)),
+            Step(None, ActUnit(UnitTypeId.CYCLONE, UnitTypeId.FACTORY, 3)),
         ]
 
         build_steps_mech = [
-            # Step(UnitExists(UnitTypeId.FACTORY, 1), ActUnit(UnitTypeId.HELLION, UnitTypeId.FACTORY, 2), skip=UnitExists(UnitTypeId.HELLION, 2, include_killed=True)),
             Step(UnitReady(UnitTypeId.FACTORYTECHLAB, 1), ActUnit(UnitTypeId.SIEGETANK, UnitTypeId.FACTORY, 20, priority=True)),
         ]
 
@@ -83,28 +107,33 @@ class StockBuildOrder(BuildOrder):
 
         morph_commands = [
             # Step(None, MorphOrbitals(2), skip_until=UnitReady(UnitTypeId.BARRACKS, 1)),
-            Step(UnitReady(UnitTypeId.ENGINEERINGBAY, 1), MorphPlanetary()),
+            Step(UnitReady(UnitTypeId.ENGINEERINGBAY, 1), MorphPlanetary(1)),
+            Step(None, MorphOrbitals(2)),
         ]
 
         tech = [
             Step(None, Tech(UpgradeId.BANSHEECLOAK), skip_until=UnitExists(UnitTypeId.STARPORTTECHLAB, 1)),
             Step(None, Tech(UpgradeId.SHIELDWALL), skip_until=UnitExists(UnitTypeId.BARRACKSTECHLAB, 1)),
-            # Step(None, Tech(UpgradeId.STIMPACK), skip_until=UnitExists(UnitTypeId.BARRACKSTECHLAB, 1)),
+            Step(None, Tech(UpgradeId.STIMPACK), skip_until=UnitExists(UnitTypeId.BARRACKSTECHLAB, 1)),
             Step(None, Tech(UpgradeId.TERRANVEHICLEWEAPONSLEVEL1)),
-            Step(None, Tech(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL1)),
-            Step(None, Tech(UpgradeId.TERRANINFANTRYWEAPONSLEVEL1)),
             Step(None, Tech(UpgradeId.TERRANINFANTRYARMORSLEVEL1)),
-            Step(None, Tech(UpgradeId.DRILLCLAWS), skip_until=UnitExists(UnitTypeId.FACTORYTECHLAB, 1)),
+            Step(None, Tech(UpgradeId.TERRANINFANTRYWEAPONSLEVEL1)),
+            Step(None, Tech(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL1)),
+            # Step(None, Tech(UpgradeId.DRILLCLAWS), skip_until=UnitExists(UnitTypeId.FACTORYTECHLAB, 1)),
             Step(None, Tech(UpgradeId.TERRANVEHICLEWEAPONSLEVEL2)),
-            Step(None, Tech(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL2)),
-            Step(None, Tech(UpgradeId.TERRANINFANTRYWEAPONSLEVEL2)),
             Step(None, Tech(UpgradeId.TERRANINFANTRYARMORSLEVEL2)),
-        ]
+            Step(None, Tech(UpgradeId.TERRANINFANTRYWEAPONSLEVEL2)),
+            Step(None, Tech(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL2)),
+            Step(None, Tech(UpgradeId.TERRANVEHICLEWEAPONSLEVEL3)),
+            Step(None, Tech(UpgradeId.TERRANINFANTRYARMORSLEVEL3)),
+            Step(None, Tech(UpgradeId.TERRANINFANTRYWEAPONSLEVEL3)),
+            Step(None, Tech(UpgradeId.TERRANVEHICLEANDSHIPARMORSLEVEL3)),
+                    ]
 
         build_order = [
             build_steps_scv,
             need_detection,
-            tempest_counter,
+            air_counter,
             build_steps_buildings,
             tech,
             morph_commands,
@@ -156,4 +185,4 @@ class Stockfish(KnowledgeBot):
             self.attack,
             PlanFinishEnemy(),
         ]
-        return BuildOrder([StockBuildOrder(), tactics])
+        return BuildOrder([StockBuildOrder(self.knowledge), tactics])
