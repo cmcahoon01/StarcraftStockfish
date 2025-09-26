@@ -148,6 +148,9 @@ class AdaptiveBuildOrder(ActBase):
         # Sort by ratio (lowest ratio = highest priority)
         unit_priorities.sort(key=lambda x: x[0])
         
+        # Re-prioritize based on resource availability
+        unit_priorities = self._prioritize_by_resources(unit_priorities)
+        
         # Build units in priority order, considering resources
         for ratio, unit_type, needed in unit_priorities:
             if self._should_build_unit(unit_type):
@@ -168,6 +171,77 @@ class AdaptiveBuildOrder(ActBase):
                 return True
         
         return False
+    
+    def _get_unit_resource_cost(self, unit_type: UnitTypeId) -> tuple[int, int]:
+        """Get the mineral and gas cost for a unit type"""
+        # Simplified cost mapping - in real implementation this would use game data
+        unit_costs = {
+            UnitTypeId.MARINE: (50, 0),
+            UnitTypeId.MARAUDER: (100, 25),
+            UnitTypeId.REAPER: (50, 50),
+            UnitTypeId.GHOST: (150, 125),
+            UnitTypeId.HELLION: (100, 0),
+            UnitTypeId.CYCLONE: (150, 100),
+            UnitTypeId.SIEGETANK: (150, 125),
+            UnitTypeId.THOR: (300, 200),
+            UnitTypeId.VIKINGFIGHTER: (150, 75),
+            UnitTypeId.MEDIVAC: (100, 100),
+            UnitTypeId.LIBERATOR: (150, 150),
+            UnitTypeId.RAVEN: (100, 200),
+            UnitTypeId.BANSHEE: (150, 100),
+            UnitTypeId.BATTLECRUISER: (400, 300),
+        }
+        return unit_costs.get(unit_type, (100, 50))  # Default cost
+    
+    def _prioritize_by_resources(self, unit_priorities: list) -> list:
+        """
+        Re-prioritize unit building based on current resource availability.
+        If floating lots of minerals but low gas, prioritize mineral-only units.
+        """
+        if not hasattr(self.knowledge, 'ai') or not hasattr(self.knowledge.ai, 'minerals'):
+            return unit_priorities  # Can't check resources, return original priorities
+        
+        try:
+            current_minerals = self.knowledge.ai.minerals
+            current_gas = self.knowledge.ai.vespene
+            
+            # If we have lots of minerals but low gas, prefer mineral-only units
+            if current_minerals > 300 and current_gas < 100:
+                mineral_only_units = []
+                gas_units = []
+                
+                for priority_data in unit_priorities:
+                    ratio, unit_type, needed = priority_data
+                    mineral_cost, gas_cost = self._get_unit_resource_cost(unit_type)
+                    
+                    if gas_cost == 0:
+                        mineral_only_units.append(priority_data)
+                    else:
+                        gas_units.append(priority_data)
+                
+                # Prioritize mineral-only units when we're floating minerals
+                return mineral_only_units + gas_units
+            
+            # If we have lots of gas but low minerals, prefer gas-heavy units
+            elif current_gas > 200 and current_minerals < 200:
+                gas_heavy_units = []
+                other_units = []
+                
+                for priority_data in unit_priorities:
+                    ratio, unit_type, needed = priority_data
+                    mineral_cost, gas_cost = self._get_unit_resource_cost(unit_type)
+                    
+                    if gas_cost >= mineral_cost:  # Gas-heavy unit
+                        gas_heavy_units.append(priority_data)
+                    else:
+                        other_units.append(priority_data)
+                
+                return gas_heavy_units + other_units
+        
+        except AttributeError:
+            pass  # Resource info not available, use original priorities
+        
+        return unit_priorities
     
     async def _build_unit(self, unit_type: UnitTypeId, max_count: int):
         """Build a specific unit type up to max_count"""
